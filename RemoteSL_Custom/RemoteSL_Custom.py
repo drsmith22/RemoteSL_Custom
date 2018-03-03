@@ -6,7 +6,7 @@ from DisplayController import DisplayController
 from consts import *
 from _Generic.util import DeviceAppointer
 
-class RemoteSL:
+class RemoteSL_Custom:
     """ Automap script for the Novation Remote SL.
     TODO: Add some general comments about the mappings, FX, MX left/right side...
     """
@@ -54,7 +54,7 @@ class RemoteSL:
         """Live -> Script
         Live can ask the script for an input port name to find a suitable one.
         """
-        return 'RemoteSL'
+        return 'RemoteSL_Custom'
 
 
 
@@ -62,7 +62,7 @@ class RemoteSL:
         """Live -> Script
         Live can ask the script for an output port name to find a suitable one.
         """
-        return 'RemoteSL'
+        return 'RemoteSL_Custom'
 
 
 

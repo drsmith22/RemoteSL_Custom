@@ -1,8 +1,8 @@
 #Embedded file name: /Users/versonator/Jenkins/live/output/mac_64_static/Release/python-bundle/MIDI Remote Scripts/RemoteSL/__init__.py
-from RemoteSL import RemoteSL
+from RemoteSL_Custom import RemoteSL_Custom
 
 def create_instance(c_instance):
-    return RemoteSL(c_instance)
+    return RemoteSL_Custom(c_instance)
 
 
 from _Framework.Capabilities import *
