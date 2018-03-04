@@ -4,6 +4,12 @@ from RemoteSLComponent import RemoteSLComponent
 from consts import *
 from _Generic.Devices import *
 
+GROUP_DEVICE_NAMES = {'AudioEffectGroupDevice': 0,
+             'MidiEffectGroupDevice': 1,
+             'InstrumentGroupDevice': 2,
+             'DrumGroupDevice': 3
+             }
+
 class EffectController(RemoteSLComponent):
     """Representing the 'left side' of the RemoteSL:
     The upper two button rows with the encoders, and the row with the poties and drum pads.
@@ -21,10 +27,9 @@ class EffectController(RemoteSLComponent):
         RemoteSLComponent.__init__(self, remote_sl_parent)
         self.__display_controller = display_controller
         self.__parent = remote_sl_parent
-        self.__last_selected_track = None
         self.__assigned_device_is_locked = False
         self.__assigned_device = None
-        self.__change_assigned_device(self.__parent.song().appointed_device)
+        self.__change_assigned_device(None)
         self.__bank = 0
         self.__show_bank = False
         self.__strips = [ EffectChannelStrip(self) for x in range(NUM_CONTROLS_PER_ROW) ]
@@ -39,9 +44,11 @@ class EffectController(RemoteSLComponent):
         elif cc_no in fx_select_button_ccs:
             self.__handle_select_button_ccs(cc_no, cc_value)
         elif cc_no in fx_upper_button_row_ccs:
-            strip = self.__strips[cc_no - FX_UPPER_BUTTON_ROW_BASE_CC]
-            if cc_value == CC_VAL_BUTTON_PRESSED:
-                strip.on_button_pressed()
+            #strip = self.__strips[cc_no - FX_UPPER_BUTTON_ROW_BASE_CC]
+            #if cc_value == CC_VAL_BUTTON_PRESSED:
+            #    strip.on_button_pressed()
+            # FIXME: For now, do nothing
+            return
         elif cc_no in fx_encoder_row_ccs:
             strip = self.__strips[cc_no - FX_ENCODER_ROW_BASE_CC]
             strip.on_encoder_moved(cc_value)
@@ -101,44 +108,25 @@ class EffectController(RemoteSLComponent):
     def __reassign_strips(self):
         page_up_value = CC_VAL_BUTTON_RELEASED
         page_down_value = CC_VAL_BUTTON_RELEASED
-        if not self.__assigned_device == None:
-            param_index = 0
-            param_banks = 0
-            chosen_bank = 0
-            param_names = []
-            parameters = []
-            if list(DEVICE_DICT.keys()).count(self.__assigned_device.class_name) > 0:
-                param_banks = DEVICE_DICT[self.__assigned_device.class_name]
-                chosen_bank = param_banks[self.__bank]
-            for s in self.__strips:
-                param = None
-                name = ''
-                if chosen_bank:
-                    param = get_parameter_by_name(self.__assigned_device, chosen_bank[param_index])
-                else:
-                    new_index = param_index + 8 * self.__bank
-                    device_parameters = self.__assigned_device.parameters[1:]
-                    device_parameters = self.__assigned_device.parameters[1:]
-                    if new_index < len(device_parameters):
-                        param = device_parameters[new_index]
-                if param:
-                    name = param.name
-                s.set_assigned_parameter(param)
-                parameters.append(param)
-                param_names.append(name)
-                param_index += 1
+        all_tracks = tuple(self.song().visible_tracks) + tuple(self.song().return_tracks) + (self.song().master_track,)
+        track_index = 0
+        for s in self.__strips:
+            if track_index < len(all_tracks):
+                track = all_tracks[track_index]
+                s.set_assigned_track(track)
+            else:
+                s.set_assigned_track(None)
+            track_index += 1
 
-            if self.__bank > 0:
-                page_down_value = CC_VAL_BUTTON_PRESSED
-            if self.__bank + 1 < number_of_parameter_banks(self.__assigned_device):
-                page_up_value = CC_VAL_BUTTON_PRESSED
-            self.__report_bank()
-        else:
-            for s in self.__strips:
-                s.set_assigned_parameter(None)
-
-            param_names = ['Please select a Device in Live to edit it...']
-            parameters = [ None for x in range(NUM_CONTROLS_PER_ROW) ]
+        param_names = []
+        parameters = []
+        for s in self.__strips:
+            if s.assigned_parameter() != None:
+                param_names.append(s.assigned_parameter().name)
+                parameters.append(s.assigned_parameter)
+            else:
+                param_names.append("")
+                parameters.append(None)
         self.__display_controller.setup_left_display(param_names, parameters)
         self.request_rebuild_midi_map()
         if self.support_mkII():
@@ -257,13 +245,32 @@ class EffectChannelStrip():
 
     def __init__(self, mixer_controller_parent):
         self.__mixer_controller = mixer_controller_parent
+        self.__assigned_track = None
+        self.__device = None
         self.__assigned_parameter = None
 
     def assigned_parameter(self):
         return self.__assigned_parameter
 
-    def set_assigned_parameter(self, parameter):
-        self.__assigned_parameter = parameter
+    def assigned_track(self):
+        return self.__assigned_track
+
+    def set_assigned_track(self, track):
+        self.__assigned_track = track
+        self.__device = None
+        if self.__assigned_track != None:
+            for index in range(len(self.__assigned_track.devices)):
+                device = self.__assigned_track.devices[(-1 * (index + 1))]
+                if device.class_name in GROUP_DEVICE_NAMES.keys():
+                    self.__device = device
+                    for param in device.parameters:
+                        if param.name == "Macro 1":
+                            self.__assigned_parameter = param
+                            break
+                    break
+
+    def device(self):
+        return self.__device
 
     def on_button_pressed(self):
         if self.__assigned_parameter and self.__assigned_parameter.is_enabled:
@@ -276,4 +283,4 @@ class EffectChannelStrip():
                 self.__assigned_parameter.value = self.__assigned_parameter.default_value
 
     def on_encoder_moved(self, cc_value):
-        raise self.__assigned_parameter == None or AssertionError('should only be reached when the encoder was not realtime mapped ')
+	raise self.__assigned_parameter == None or AssertionError('should only be reached when the encoder was not realtime mapped ')
