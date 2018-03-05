@@ -3,7 +3,9 @@ import Live
 from RemoteSLComponent import RemoteSLComponent
 from consts import *
 from _Generic.Devices import *
+import sys
 
+MACRO_NAMES = RCK_BANK1
 GROUP_DEVICE_NAMES = {'AudioEffectGroupDevice': 0,
              'MidiEffectGroupDevice': 1,
              'InstrumentGroupDevice': 2,
@@ -247,7 +249,12 @@ class EffectChannelStrip():
         self.__mixer_controller = mixer_controller_parent
         self.__assigned_track = None
         self.__device = None
+        self.__macros = [ None for x in range(len(MACRO_NAMES)) ]
         self.__assigned_parameter = None
+
+    @property
+    def macros(self):
+        return self.__macros
 
     def assigned_parameter(self):
         return self.__assigned_parameter
@@ -258,16 +265,22 @@ class EffectChannelStrip():
     def set_assigned_track(self, track):
         self.__assigned_track = track
         self.__device = None
+        self.__macros = [ None for x in range(len(MACRO_NAMES)) ]
         if self.__assigned_track != None:
             for index in range(len(self.__assigned_track.devices)):
                 device = self.__assigned_track.devices[(-1 * (index + 1))]
                 if device.class_name in GROUP_DEVICE_NAMES.keys():
                     self.__device = device
+                    param_index = 0
                     for param in device.parameters:
-                        if param.name == "Macro 1":
-                            self.__assigned_parameter = param
+                        # Skip the "Device On" parameter.
+                        if str(param.name).startswith('Device On'):
+                            continue
+                        self.__macros[param_index] = param
+                        param_index += 1
+                        if param_index >= 7:
                             break
-                    break
+            self.__assigned_parameter = self.__macros[0]
 
     def device(self):
         return self.__device
