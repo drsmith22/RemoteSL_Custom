@@ -72,9 +72,9 @@ class EffectController(RemoteSLComponent):
         for s in self.__strips:
             strip_index = self.__strips.index(s)
             cc_no = fx_encoder_row_ccs[strip_index]
-            if s.assigned_parameter():
+            if s.macros[0]:
                 map_mode = Live.MidiMap.MapMode.relative_smooth_signed_bit
-                parameter = s.assigned_parameter()
+                parameter = s.macros[0]
                 if self.support_mkII():
                     feedback_rule = Live.MidiMap.CCFeedbackRule()
                     feedback_rule.cc_no = fx_encoder_feedback_ccs[strip_index]
@@ -123,9 +123,9 @@ class EffectController(RemoteSLComponent):
         param_names = []
         parameters = []
         for s in self.__strips:
-            if s.assigned_parameter() != None:
-                param_names.append(s.assigned_parameter().name)
-                parameters.append(s.assigned_parameter)
+            if s.macros[0] != None:
+                param_names.append(s.macros[0].name)
+                parameters.append(s.macros[0])
             else:
                 param_names.append("")
                 parameters.append(None)
@@ -250,14 +250,10 @@ class EffectChannelStrip():
         self.__assigned_track = None
         self.__device = None
         self.__macros = [ None for x in range(len(MACRO_NAMES)) ]
-        self.__assigned_parameter = None
 
     @property
     def macros(self):
         return self.__macros
-
-    def assigned_parameter(self):
-        return self.__assigned_parameter
 
     def assigned_track(self):
         return self.__assigned_track
@@ -280,20 +276,13 @@ class EffectChannelStrip():
                         param_index += 1
                         if param_index >= 7:
                             break
-            self.__assigned_parameter = self.__macros[0]
 
     def device(self):
         return self.__device
 
     def on_button_pressed(self):
-        if self.__assigned_parameter and self.__assigned_parameter.is_enabled:
-            if self.__assigned_parameter.is_quantized:
-                if self.__assigned_parameter.value + 1 > self.__assigned_parameter.max:
-                    self.__assigned_parameter.value = self.__assigned_parameter.min
-                else:
-                    self.__assigned_parameter.value = self.__assigned_parameter.value + 1
-            else:
-                self.__assigned_parameter.value = self.__assigned_parameter.default_value
+        # FIXME: Do nothing for now.
+        return
 
     def on_encoder_moved(self, cc_value):
 	raise self.__assigned_parameter == None or AssertionError('should only be reached when the encoder was not realtime mapped ')
