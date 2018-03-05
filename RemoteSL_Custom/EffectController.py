@@ -57,7 +57,8 @@ class EffectController(RemoteSLComponent):
         elif cc_no in fx_lower_button_row_ccs:
             raise False or AssertionError('Lower Button CCS should be passed to Live!')
         elif cc_no in fx_poti_row_ccs:
-            raise False or AssertionError('Poti CCS should be passed to Live!')
+            strip = self.__strips[cc_no - FX_POTI_ROW_BASE_CC]
+            strip.on_poti_moved(cc_value)
         else:
             raise False or AssertionError('unknown FX midi message')
 
@@ -71,6 +72,8 @@ class EffectController(RemoteSLComponent):
         needs_takeover = True
         for s in self.__strips:
             strip_index = self.__strips.index(s)
+
+            # Map the encoder to macro 0
             cc_no = fx_encoder_row_ccs[strip_index]
             if s.macros[0]:
                 map_mode = Live.MidiMap.MapMode.relative_smooth_signed_bit
@@ -86,22 +89,49 @@ class EffectController(RemoteSLComponent):
                         ring_mode_value = FX_RING_PAN_VALUE
                     elif parameter.is_quantized:
                         ring_mode_value = FX_RING_SIN_VALUE
-                    self.send_midi((self.cc_status_byte(), fx_encoder_led_mode_ccs[strip_index], ring_mode_value))
-                    Live.MidiMap.map_midi_cc_with_feedback_map(midi_map_handle, parameter, SL_MIDI_CHANNEL, cc_no, map_mode, feedback_rule, not needs_takeover)
-                    Live.MidiMap.send_feedback_for_parameter(midi_map_handle, parameter)
+                    self.send_midi((self.cc_status_byte(),
+                                    fx_encoder_led_mode_ccs[strip_index],
+                                    ring_mode_value))
+                    Live.MidiMap.map_midi_cc_with_feedback_map(midi_map_handle,
+                                                               parameter,
+                                                               SL_MIDI_CHANNEL,
+                                                               cc_no, map_mode,
+                                                               feedback_rule,
+                                                               not needs_takeover)
+                    Live.MidiMap.send_feedback_for_parameter(midi_map_handle,
+                                                             parameter)
                 else:
-                    Live.MidiMap.map_midi_cc(midi_map_handle, parameter, SL_MIDI_CHANNEL, cc_no, map_mode, not needs_takeover)
+                    Live.MidiMap.map_midi_cc(midi_map_handle, parameter,
+                                             SL_MIDI_CHANNEL, cc_no,
+                                             map_mode, not needs_takeover)
             else:
                 if self.support_mkII():
-                    self.send_midi((self.cc_status_byte(), fx_encoder_led_mode_ccs[strip_index], 0))
-                    self.send_midi((self.cc_status_byte(), fx_encoder_feedback_ccs[strip_index], 0))
-                Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle, SL_MIDI_CHANNEL, cc_no)
+                    self.send_midi((self.cc_status_byte(),
+                                    fx_encoder_led_mode_ccs[strip_index], 0))
+                    self.send_midi((self.cc_status_byte(),
+                                    fx_encoder_feedback_ccs[strip_index], 0))
+                Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle,
+                                             SL_MIDI_CHANNEL, cc_no)
+
+            # Map the poti to macro 1
+            cc_no = fx_poti_row_ccs[strip_index]
+            if s.macros[1]:
+                map_mode = Live.MidiMap.MapMode.absolute
+                parameter = s.macros[1]
+                Live.MidiMap.map_midi_cc(midi_map_handle, parameter,
+                                         SL_MIDI_CHANNEL, cc_no, map_mode,
+                                         not needs_takeover)
+            else:
+                Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle,
+                                             SL_MIDI_CHANNEL, cc_no)
 
         for cc_no in fx_forwarded_ccs:
-            Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle, SL_MIDI_CHANNEL, cc_no)
+            Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle,
+                                         SL_MIDI_CHANNEL, cc_no)
 
         for note in fx_forwarded_notes:
-            Live.MidiMap.forward_midi_note(script_handle, midi_map_handle, SL_MIDI_CHANNEL, note)
+            Live.MidiMap.forward_midi_note(script_handle, midi_map_handle,
+                                           SL_MIDI_CHANNEL, note)
 
     def refresh_state(self):
         self.__update_select_row_leds()
@@ -285,4 +315,7 @@ class EffectChannelStrip():
         return
 
     def on_encoder_moved(self, cc_value):
-	raise self.__assigned_parameter == None or AssertionError('should only be reached when the encoder was not realtime mapped ')
+	raise AssertionError('should only be reached when the encoder was not realtime mapped ')
+
+    def on_poti_moved(self, cc_value):
+	raise AssertionError('should only be reached when the poti was not realtime mapped ')
