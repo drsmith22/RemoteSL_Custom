@@ -3,7 +3,6 @@ import Live
 from RemoteSLComponent import RemoteSLComponent
 from consts import *
 from _Generic.Devices import *
-import sys
 
 MACRO_NAMES = RCK_BANK1
 GROUP_DEVICE_NAMES = {'AudioEffectGroupDevice': 0,
@@ -46,16 +45,18 @@ class EffectController(RemoteSLComponent):
         elif cc_no in fx_select_button_ccs:
             self.__handle_select_button_ccs(cc_no, cc_value)
         elif cc_no in fx_upper_button_row_ccs:
-            #strip = self.__strips[cc_no - FX_UPPER_BUTTON_ROW_BASE_CC]
-            #if cc_value == CC_VAL_BUTTON_PRESSED:
-            #    strip.on_button_pressed()
-            # FIXME: For now, do nothing
-            return
+            strip = self.__strips[cc_no - FX_UPPER_BUTTON_ROW_BASE_CC]
+            if cc_value == CC_VAL_BUTTON_PRESSED:
+                strip.on_button_pressed()
         elif cc_no in fx_encoder_row_ccs:
             strip = self.__strips[cc_no - FX_ENCODER_ROW_BASE_CC]
             strip.on_encoder_moved(cc_value)
         elif cc_no in fx_lower_button_row_ccs:
-            raise False or AssertionError('Lower Button CCS should be passed to Live!')
+            strip = self.__strips[cc_no - FX_LOWER_BUTTON_ROW_BASE_CC]
+            # Why 127? For some odd reason that is what the lower
+            # button row gets when pressed.
+            if cc_value == CC_VAL_BUTTON_PRESSED or cc_value == 127:
+                strip.on_lower_button_pressed(cc_no)
         elif cc_no in fx_poti_row_ccs:
             strip = self.__strips[cc_no - FX_POTI_ROW_BASE_CC]
             strip.on_poti_moved(cc_value)
@@ -125,6 +126,9 @@ class EffectController(RemoteSLComponent):
                 Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle,
                                              SL_MIDI_CHANNEL, cc_no)
 
+            # Map Send 2 to the lower row of buttons
+            # fx_lower_button_row_ccs
+
         for cc_no in fx_forwarded_ccs:
             Live.MidiMap.forward_midi_cc(script_handle, midi_map_handle,
                                          SL_MIDI_CHANNEL, cc_no)
@@ -165,7 +169,11 @@ class EffectController(RemoteSLComponent):
             self.send_midi((self.cc_status_byte(), FX_DISPLAY_PAGE_DOWN, page_down_value))
             self.send_midi((self.cc_status_byte(), FX_DISPLAY_PAGE_UP, page_up_value))
             for cc_no in fx_upper_button_row_ccs:
-                self.send_midi((self.cc_status_byte(), cc_no, CC_VAL_BUTTON_RELEASED))
+                self.send_midi((self.cc_status_byte(), cc_no,
+                                CC_VAL_BUTTON_RELEASED))
+            for cc_no in fx_lower_button_row_ccs:
+                self.send_midi((self.cc_status_byte(), cc_no,
+                                CC_VAL_BUTTON_RELEASED))
 
     def __handle_page_up_down_ccs(self, cc_no, cc_value):
         new_bank = self.__assigned_device != None and self.__bank
@@ -207,10 +215,24 @@ class EffectController(RemoteSLComponent):
             raise False or AssertionError('unknown select row midi message')
 
     def __update_select_row_leds(self):
-        if self.__assigned_device_is_locked:
-            self.send_midi((self.cc_status_byte(), FX_SELECT_FIRST_BUTTON_ROW, CC_VAL_BUTTON_PRESSED))
-        else:
-            self.send_midi((self.cc_status_byte(), FX_SELECT_FIRST_BUTTON_ROW, CC_VAL_BUTTON_RELEASED))
+        #if self.__assigned_device_is_locked:
+        #    self.send_midi((self.cc_status_byte(), FX_SELECT_FIRST_BUTTON_ROW, CC_VAL_BUTTON_PRESSED))
+        #else:
+        #    self.send_midi((self.cc_status_byte(), FX_SELECT_FIRST_BUTTON_ROW, CC_VAL_BUTTON_RELEASED))
+        self.send_midi((self.cc_status_byte(), FX_SELECT_FIRST_BUTTON_ROW,
+                        CC_VAL_BUTTON_RELEASED))
+        self.send_midi((self.cc_status_byte(), FX_SELECT_SECOND_BUTTON_ROW,
+                        CC_VAL_BUTTON_RELEASED))
+
+#                    ring_mode_value = FX_RING_VOL_VALUE
+#                    if parameter.min == -1 * parameter.max:
+#                        ring_mode_value = FX_RING_PAN_VALUE
+#                    elif parameter.is_quantized:
+#                        ring_mode_value = FX_RING_SIN_VALUE
+#                    self.send_midi((self.cc_status_byte(),
+#                                    fx_encoder_led_mode_ccs[strip_index],
+#                                    ring_mode_value))
+
 
     def lock_to_device(self, device):
         if device:
@@ -280,10 +302,15 @@ class EffectChannelStrip():
         self.__assigned_track = None
         self.__device = None
         self.__macros = [ None for x in range(len(MACRO_NAMES)) ]
+        self.__sends = None
 
     @property
     def macros(self):
         return self.__macros
+
+    @property
+    def sends(self):
+        return self.__sends
 
     def assigned_track(self):
         return self.__assigned_track
@@ -292,6 +319,7 @@ class EffectChannelStrip():
         self.__assigned_track = track
         self.__device = None
         self.__macros = [ None for x in range(len(MACRO_NAMES)) ]
+        self.__sends = None
         if self.__assigned_track != None:
             for index in range(len(self.__assigned_track.devices)):
                 device = self.__assigned_track.devices[(-1 * (index + 1))]
@@ -306,6 +334,7 @@ class EffectChannelStrip():
                         param_index += 1
                         if param_index >= 7:
                             break
+            self.__sends = self.__assigned_track.mixer_device.sends
 
     def device(self):
         return self.__device
@@ -313,6 +342,21 @@ class EffectChannelStrip():
     def on_button_pressed(self):
         # FIXME: Do nothing for now.
         return
+
+    def on_lower_button_pressed(self, cc_no):
+        # The lower buttons get mapped to Sends 2 (delay).
+        if self.__sends and len(self.__sends) >= 2:
+            send = self.__sends[1]
+            if send.value == send.min:
+                send.value = send.max
+                self.__mixer_controller.send_midi((self.__mixer_controller.cc_status_byte(),
+                                                   cc_no,
+                                                   CC_VAL_BUTTON_PRESSED))
+            else:
+                send.value = send.min
+                self.__mixer_controller.send_midi((self.__mixer_controller.cc_status_byte(),
+                                                   cc_no,
+                                                   CC_VAL_BUTTON_RELEASED))
 
     def on_encoder_moved(self, cc_value):
 	raise AssertionError('should only be reached when the encoder was not realtime mapped ')
