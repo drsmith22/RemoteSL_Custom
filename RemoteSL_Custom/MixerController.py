@@ -188,7 +188,10 @@ class MixerController(RemoteSLComponent):
                 self.song().stop_playing()
         elif cc_no == TS_PLAY_CC:
             if cc_value == CC_VAL_BUTTON_PRESSED:
+                # This acts more like "Scene Launch" - starts Play and
+                # then select the next scene.
                 self.song().start_playing()
+                self.song().view.selected_scene.fire_as_selected()
         elif cc_no == TS_LOOP_CC:
             if cc_value == CC_VAL_BUTTON_PRESSED:
                 self.song().loop = not self.song().loop
