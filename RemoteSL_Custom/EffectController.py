@@ -47,7 +47,7 @@ class EffectController(RemoteSLComponent):
         elif cc_no in fx_upper_button_row_ccs:
             strip = self.__strips[cc_no - FX_UPPER_BUTTON_ROW_BASE_CC]
             if cc_value == CC_VAL_BUTTON_PRESSED:
-                strip.on_button_pressed()
+                strip.on_button_pressed(cc_no)
         elif cc_no in fx_encoder_row_ccs:
             strip = self.__strips[cc_no - FX_ENCODER_ROW_BASE_CC]
             strip.on_encoder_moved(cc_value)
@@ -332,15 +332,28 @@ class EffectChannelStrip():
                             continue
                         self.__macros[param_index] = param
                         param_index += 1
-                        if param_index >= 7:
+                        if param_index >= len(MACRO_NAMES):
                             break
             self.__sends = self.__assigned_track.mixer_device.sends
 
     def device(self):
         return self.__device
 
-    def on_button_pressed(self):
-        # FIXME: Do nothing for now.
+    def on_button_pressed(self, cc_no):
+        # The upper buttons get mapped to macro 8 (freeze).
+        if self.__macros and self.__macros[7]:
+            macro = self.__macros[7]
+            if macro.value == macro.min:
+                macro.value = macro.max
+                self.__mixer_controller.send_midi((self.__mixer_controller.cc_status_byte(),
+                                                   cc_no,
+                                                   CC_VAL_BUTTON_PRESSED))
+            else:
+                macro.value = macro.min
+                self.__mixer_controller.send_midi((self.__mixer_controller.cc_status_byte(),
+                                                   cc_no,
+                                                   CC_VAL_BUTTON_RELEASED))
+
         return
 
     def on_lower_button_pressed(self, cc_no):
